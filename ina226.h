@@ -1,147 +1,141 @@
 #ifndef _INA226_H_
 #define _INA226_H_
 
-#ifdef __cplusplus
-extern "C" {
+#if !defined BIT
+#define BIT(n) (1 << n)
 #endif
 
-#if defined HAVE_CONFIG_H
-#include "sdkconfig.h"
-#endif
+typedef size_t (*INAWriteBytes)(int address, const uint8_t *Buffer, size_t BytesToWrite);
+typedef size_t (*INAReadBytes)(int address, uint8_t *Buffer, size_t BufferMaxLen);
 
-#if ! defined BIT
-#define BIT( n ) ( 1 << n )
-#endif
+typedef enum
+{
+    INA226_REG_CFG = 0x00,
+    INA226_REG_SHUNT_VOLTAGE,
+    INA226_REG_BUS_VOLTAGE,
+    INA226_REG_POWER,
+    INA226_REG_CURRENT,
+    INA226_REG_CALIBRATION,
+    INA226_REG_ALERT_MASK,
+    INA226_REG_ALERT_LIMIT,
+    INA226_REG_MANUFACTURER_ID = 0xFE,
+    INA226_REG_DIE_ID
+} ina226_reg_t;
 
-typedef size_t ( *INAWriteBytes ) ( int Address, const uint8_t* Buffer, size_t BytesToWrite );
-typedef size_t ( *INAReadBytes ) ( int Address, uint8_t* Buffer, size_t BufferMaxLen );
+typedef enum
+{
+    INA226_AVERAGES_1 = 0,
+    INA226_AVERAGES_4,
+    INA226_AVERAGES_16,
+    INA226_AVERAGES_64,
+    INA226_AVERAGES_128,
+    INA226_AVERAGES_256,
+    INA226_AVERAGES_512,
+    INA226_AVERAGES_1024,
+    INA226_NUM_AVERAGES = 7
+} ina226_averaging_mode_t;
 
-typedef enum {
-    INA226_Reg_Cfg = 0x00,
-    INA226_Reg_ShuntVoltage,
-    INA226_Reg_BusVolage,
-    INA226_Reg_Power,
-    INA226_Reg_Current,
-    INA226_Reg_Calibration,
-    INA226_Reg_AlertMask,
-    INA226_Reg_AlertLimit,
-    INA226_Reg_ManufacturerId = 0xFE,
-    INA226_Reg_DieId
-} INA226_Reg;
+typedef enum
+{
+    INA226_CONVERSION_TIME_140_US = 0,
+    INA226_CONVERSION_TIME_204_US,
+    INA226_CONVERSION_TIME_332_US,
+    INA226_CONVERSION_TIME_588_US,
+    INA226_CONVERSION_TIME_1_MS,
+    INA226_CONVERSION_TIME_116_MS,
+    INA226_CONVERSION_TIME_156_MS,
+    INA226_CONVERSION_TIME_244_MS,
+    INA226_NUM_CONVERSION_TIME = 7
+} ina226_conversion_time_t;
 
-typedef enum {
-    INA226_Averages_1 = 0,
-    INA226_Averages_4,
-    INA226_Averages_16,
-    INA226_Averages_64,
-    INA226_Averages_128,
-    INA226_Averages_256,
-    INA226_Averages_512,
-    INA226_Averages_1024,
-    INA226_Num_Averages = 7
-} INA226_AveragingMode;
+typedef enum
+{
+    INA226_MODE_SHUTDOWN = 0,
+    INA226_MODE_SHUNT_VOLTAGE_TRIGGERED,
+    INA226_MODE_BUS_VOLTAGE_TRIGGERED,
+    INA226_MODE_SHUNT_AND_BUS_TRIGGERED,
+    INA226_MODE_SHUTDOWN_2,
+    INA226_MODE_SHUNT_VOLTAGE_CONTINUOUS,
+    INA226_MODE_BUS_VOLTAGE_CONTINUOUS,
+    INA226_MODE_SHUNT_AND_BUS_CONTINUOUS,
+    INA226_NUM_MODES = 7
+} ina226_mode_t;
 
-typedef enum {
-    INA226_ConversionTime_140us = 0,
-    INA226_ConversionTime_204us,
-    INA226_ConversionTime_332us,
-    INA226_ConversionTime_588us,
-    INA226_ConversionTime_1_1ms,
-    INA226_ConversionTime_2_116ms,
-    INA226_ConversionTime_4_156ms,
-    INA226_ConversionTime_8_244ms,
-    INA226_Num_ConversionTimes = 7
-} INA226_ConversionTime;
+typedef enum
+{
+    INA226_ALERT_SHUNT_OVER_VOLTAGE = BIT(15),
+    INA226_ALERT_SHUNT_UNDER_VOLTAGE = BIT(14),
+    INA226_ALERT_BUS_OVER_VOLTAGE = BIT(13),
+    INA226_ALERT_BUS_UNDER_VOLTAGE = BIT(12),
+    INA226_ALERT_POWER_OVER_LIMIT = BIT(11),
+    INA226_ALERT_CONVERSION_READY = BIT(10),
+    INA226_ALERT_FUNCTION_FLAG = BIT(4),
+    INA226_ALERT_CONVERSION_READY_FLAG = BIT(3),
+    INA226_ALERT_MATH_OVERFLOW_FLAG = BIT(2),
+    INA226_ALERT_POLARITY = BIT(1),
+    INA226_ALERT_LATCH_ENABLE = BIT(0)
+} ina226_alert_t;
 
-typedef enum {
-    INA226_Mode_Shutdown = 0,
-    INA226_Mode_ShuntVoltage_Triggered,
-    INA226_Mode_BusVoltage_Triggered,
-    INA226_Mode_ShuntAndBus_Triggered,
-    INA226_Mode_Shutdown2,
-    INA226_Mode_ShuntVoltage_Continuous,
-    INA226_Mode_BusVoltage_Continuous,
-    INA226_Mode_ShuntAndBus_Continuous,
-    INA226_Num_Modes = 7
-} INA226_Mode;
+struct ina226_device_t
+{
+    float shunt_voltage_lsb;
+    float bus_voltage_lsb;
 
-typedef enum {
-    INA226_Alert_ShuntOverVoltage = BIT( 15 ),
-    INA226_Alert_ShuntUnderVoltage = BIT( 14 ),
-    INA226_Alert_BusOverVoltage = BIT( 13 ),
-    INA226_Alert_BusUnderVoltage = BIT( 12 ),
-    INA226_Alert_PowerOverLimit = BIT( 11 ),
-    INA226_Alert_ConversionReady = BIT( 10 ),
-    INA226_Alert_AlertFunctionFlag = BIT( 4 ),
-    INA226_Alert_ConversionReadyFlag = BIT( 3 ),
-    INA226_Alert_MathOverflowFlag = BIT( 2 ),
-    INA226_Alert_AlertPolarity = BIT( 1 ),
-    INA226_Alert_AlertLatchEnable = BIT( 0 )
-} INA226_Alert;
-
-struct INA226_Device {
-    float ShuntVoltage_LSB;
-    float BusVoltage_LSB;
-
-    float CalibrationValue;
-    float Current_LSB;
+    float calibration_value;
+    float current_lsb;
 
     INAWriteBytes WriteBytesFn;
     INAReadBytes ReadBytesFn;
 
-    int Address;
+    int address;
 };
 
-#define INA226_CFG_Reset BIT( 15 )
+#define INA226_CFG_Reset BIT(15)
 
-#define INA226_CFG_AveragingMask ( BIT( 9 ) | BIT( 10 ) | BIT( 11 ) )
+#define INA226_CFG_AveragingMask (BIT(9) | BIT(10) | BIT(11))
 #define INA226_CFG_AveragingOffset 9
 
-#define INA226_CFG_BusVoltageTimeMask ( BIT( 6 ) | BIT( 7 ) | BIT( 8 ) )
+#define INA226_CFG_BusVoltageTimeMask (BIT(6) | BIT(7) | BIT(8))
 #define INA226_CFG_BusVoltageTimeOffset 6
 
-#define INA226_CFG_ShuntVoltageTimeMask ( BIT( 3 ) | BIT( 4 ) | BIT( 5 ) )
+#define INA226_CFG_ShuntVoltageTimeMask (BIT(3) | BIT(4) | BIT(5))
 #define INA226_CFG_ShuntVoltageTimeOffset 3
 
-#define INA226_CFG_ModeMask ( BIT( 0 ) | BIT( 1 ) | BIT( 2 ) )
+#define INA226_CFG_ModeMask (BIT(0) | BIT(1) | BIT(2))
 
-bool INA226_WriteReg( struct INA226_Device* Device, INA226_Reg Register, uint16_t Value );
-uint16_t INA226_ReadReg16( struct INA226_Device* Device, INA226_Reg Register );
+bool ina226_write_reg(struct ina226_device_t *Device, ina226_reg_t Register, uint16_t Value);
+uint16_t ina226_read_reg16(struct ina226_device_t *Device, ina226_reg_t Register);
 
-uint16_t INA226_GetManufacturerId( struct INA226_Device* Device );
-uint16_t INA226_GetDieId( struct INA226_Device* Device );
+uint16_t ina226_get_manufacturer_id(struct ina226_device_t *Device);
+uint16_t ina226_get_die_id(struct ina226_device_t *Device);
 
-uint16_t INA226_ReadConfig( struct INA226_Device* Device );
-void INA226_WriteConfig( struct INA226_Device* Device, uint16_t Config );
+uint16_t ina226_read_config(struct ina226_device_t *Device);
+void ina226_write_config(struct ina226_device_t *Device, uint16_t Config);
 
-INA226_AveragingMode INA226_GetAveragingMode( struct INA226_Device* Device );
-void INA226_SetAveragingMode( struct INA226_Device* Device, INA226_AveragingMode Mode );
+ina226_averaging_mode_t ina226_get_averaging_mode(struct ina226_device_t *Device);
+void ina226_set_averaging_mode(struct ina226_device_t *Device, ina226_averaging_mode_t Mode);
 
-INA226_ConversionTime INA226_GetBusVoltageConversionTime( struct INA226_Device* Device );
-void INA226_SetBusVoltageConversionTime( struct INA226_Device* Device, INA226_ConversionTime ConversionTime );
+ina226_conversion_time_t ina226_get_bus_voltage_conversation_time(struct ina226_device_t *Device);
+void ina226_set_bus_voltage_conversation_time(struct ina226_device_t *Device, ina226_conversion_time_t ConversionTime);
 
-INA226_ConversionTime INA226_GetShuntVoltageConversionTime( struct INA226_Device* Device );
-void INA226_SetShuntVoltageConversionTime( struct INA226_Device* Device, INA226_ConversionTime ConversionTime );
+ina226_conversion_time_t ina226_get_shunt_voltage_conversation_time(struct ina226_device_t *Device);
+void ina226_set_shunt_voltage_conversation_time(struct ina226_device_t *Device, ina226_conversion_time_t ConversionTime);
 
-INA226_Mode INA226_GetOperatingMode( struct INA226_Device* Device );
-void INA226_SetOperatingMode( struct INA226_Device* Device, INA226_Mode Mode );
+ina226_mode_t ina226_get_operation_mode(struct ina226_device_t *Device);
+void ina226_set_operation_mode(struct ina226_device_t *Device, ina226_mode_t Mode);
 
-float INA226_GetShuntVoltage( struct INA226_Device* Device );
-float INA226_GetBusVoltage( struct INA226_Device* Device );
-float INA226_GetCurrent( struct INA226_Device* Device );
-float INA226_GetPower( struct INA226_Device* Device );
+float ina226_get_shunt_voltage(struct ina226_device_t *Device);
+float ina226_get_bus_voltage(struct ina226_device_t *Device);
+float ina226_get_current(struct ina226_device_t *Device);
+float ina226_get_power(struct ina226_device_t *Device);
 
-bool INA226_Init( struct INA226_Device* Device, int I2CAddress, int RShuntInMilliOhms, int MaxCurrentInAmps, INAWriteBytes WriteBytesFn, INAReadBytes ReadBytesFn );
-void INA226_Reset( struct INA226_Device* Device );
-void INA226_Calibrate( struct INA226_Device* Device, int RShunt, int MaxCurrentInMilliamps );
+bool ina226_init(struct ina226_device_t *Device, int I2CAddress, int RShuntInMilliOhms, int MaxCurrentInAmps, INAWriteBytes WriteBytesFn, INAReadBytes ReadBytesFn);
+void ina226_reset(struct ina226_device_t *Device);
+void ina226_calibrate(struct ina226_device_t *Device, int RShunt, int MaxCurrentInMilliamps);
 
-INA226_Alert INA226_GetAlertMask( struct INA226_Device* INADevice );
-INA226_Alert INA226_SetAlertMask( struct INA226_Device* INADevice, INA226_Alert AlertMask );
+ina226_alert_t ina226_get_alert_mask(struct ina226_device_t *INADevice);
+ina226_alert_t ina226_set_alert_mask(struct ina226_device_t *INADevice, ina226_alert_t AlertMask);
 
-float INA226_SetAlertLimit_BusVoltage( struct INA226_Device* Device, float BusVoltageInMV );
-
-#ifdef __cplusplus
-}
-#endif
+float ina226_set_alert_limit_bus_voltage(struct ina226_device_t *Device, float BusVoltageInMV);
 
 #endif
