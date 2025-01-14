@@ -76,7 +76,7 @@ typedef enum
     INA226_ALERT_LATCH_ENABLE = BIT(0)
 } ina226_alert_t;
 
-struct ina226_device_t
+typedef struct
 {
     float shunt_voltage_lsb;
     float bus_voltage_lsb;
@@ -88,7 +88,7 @@ struct ina226_device_t
     INAReadBytes ReadBytesFn;
 
     int address;
-};
+} ina226_device_t;
 
 #define INA226_CFG_Reset BIT(15)
 
