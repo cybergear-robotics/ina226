@@ -1,0 +1,20 @@
+description: INA226 driver for voltage and power measurement
+url: https://github.com/cybergear-robotics/ina226
+issues: https://github.com/cybergear-robotics/ina226/issues
+repository: git@github.com:cybergear-robotics/ina226.git
+license: "MIT"
+tags:
+    - ina226
+    - i2c
+maintainers:
+  - "Johannes Fischer"
+
+dependencies:
+  idf: ">=5.0"
+
+files:
+  exclude:
+    - "datasheet/"
+    - "datasheet/**/*"
+    - "docs/"
+    - "docs/**/*"

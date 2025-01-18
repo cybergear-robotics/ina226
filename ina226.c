@@ -1,366 +1,127 @@
-/**
- * Copyright (c) 2017 Tara Keeling
- *
- * This software is released under the MIT License.
- * https://opensource.org/licenses/MIT
- */
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/semphr.h>
+#include <esp_err.h>
 
 #include "ina226.h"
+#include "ina226_defs.h"
 
-static SemaphoreHandle_t INALock = NULL;
 
-#define NullCheck(ptr, retexpr)                             \
-    {                                                       \
-        if (ptr == NULL)                                    \
-        {                                                   \
-            printf("%s: %s == NULL\n", __FUNCTION__, #ptr); \
-            retexpr;                                        \
-        };                                                  \
-    }
-
-#define RangeCheck(value, min, max, retexpr)                                                                           \
-    {                                                                                                                  \
-        if (value < min || value > max)                                                                                \
-        {                                                                                                              \
-            printf("ERROR %s: %s out of range. Got %d, expected [%d to %d]\n", __FUNCTION__, #value, value, min, max); \
-            retexpr;                                                                                                   \
-        }                                                                                                              \
-    }
-
-static bool ina226_set_register_pointer(ina226_device_t *Device, ina226_reg_t Register)
+esp_err_t ina226_write_register(ina226_device_t *device, uint8_t reg_addr, uint16_t value)
 {
-    uint8_t BReg = (uint8_t)Register;
-    bool Result = false;
-
-    NullCheck(Device, return false);
-    NullCheck(Device->WriteBytesFn, return false);
-
-    Result = (Device->WriteBytesFn(Device->address, (const uint8_t *)&BReg, 1) == sizeof(uint8_t)) ? true : false;
-    return Result;
+    uint8_t write_buf[3] = {reg_addr, value >> 8, value & 0xFF};
+    return i2c_master_write_to_device(
+        device->config->i2c_port, 
+        device->config->i2c_addr, 
+        write_buf, 
+        sizeof(write_buf), 
+        device->config->timeout_ms / portTICK_PERIOD_MS);
 }
 
-bool ina226_write_reg(ina226_device_t *Device, ina226_reg_t Register, uint16_t Value)
+esp_err_t ina226_read_register(ina226_device_t *device, uint8_t reg_addr, uint8_t* data, uint8_t len)
 {
-    uint8_t Command[] = {
-        (uint8_t)Register,
-        Value >> 8,
-        Value & 0xFF};
-    bool Result = false;
-
-    NullCheck(Device, return false);
-    NullCheck(Device->WriteBytesFn, return false);
-
-    if (xSemaphoreTake(INALock, portMAX_DELAY) == pdTRUE)
-    {
-        Result = (Device->WriteBytesFn(Device->address, (const uint8_t *)Command, sizeof(Command)) == sizeof(Command)) ? true : false;
-        xSemaphoreGive(INALock);
-    }
-
-    return Result;
+    return i2c_master_write_read_device(
+        device->config->i2c_port, 
+        device->config->i2c_addr, 
+        &reg_addr, 
+        1, 
+        data, 
+        len, 
+        device->config->timeout_ms / portTICK_PERIOD_MS);
 }
 
-uint16_t ina226_read_reg16(ina226_device_t *Device, ina226_reg_t Register)
+esp_err_t ina226_get_manufacturer_id(ina226_device_t *device, uint16_t *manufacturer_id)
 {
-    uint16_t Value = 0;
-
-    NullCheck(Device, return 0);
-    NullCheck(Device->WriteBytesFn, return 0);
-    NullCheck(Device->ReadBytesFn, return 0);
-
-    if (xSemaphoreTake(INALock, portMAX_DELAY) == pdTRUE)
-    {
-        if (ina226_set_register_pointer(Device, Register) == true)
-        {
-            /* Other thread could interrupt right here and cause shit */
-            if (Device->ReadBytesFn(Device->address, (uint8_t *)&Value, sizeof(uint16_t)) != sizeof(uint16_t))
-            {
-                Value = 0;
-            }
-        }
-
-        xSemaphoreGive(INALock);
-    }
-
-    return (Value >> 8) | (Value << 8);
+    return ina226_read_register(device, INA226_REG_MANUFACTURER_ID, manufacturer_id, 2);
 }
 
-uint16_t ina226_get_manufacturer_id(ina226_device_t *Device)
+esp_err_t ina226_get_die_id(ina226_device_t *device, uint16_t *die_id)
 {
-    return ina226_read_reg16(Device, INA226_REG_MANUFACTURER_ID);
+    return ina226_read_register(device, INA226_REG_DIE_ID, die_id, 2);
 }
 
-uint16_t ina226_get_die_id(ina226_device_t *Device)
+esp_err_t ina226_get_shunt_voltage(ina226_device_t *device, float *voltage)
 {
-    return ina226_read_reg16(Device, INA226_REG_DIE_ID);
+    uint8_t data[2];
+    esp_err_t err;
+    err = ina226_read_register(device, INA226_REG_SHUNT_VOLTAGE, &data, 2);
+    *voltage = (float) (data[0] << 8 | data[1]) * 2.5e-6f; /* fixed to 2.5 uV */
+    return err;
 }
 
-uint16_t ina226_read_config(ina226_device_t *Device)
+esp_err_t ina226_get_bus_voltage(ina226_device_t *device, float *voltage)
 {
-    return ina226_read_reg16(Device, INA226_REG_CFG);
+    uint8_t data[2];
+    esp_err_t err;
+    err = ina226_read_register(device, INA226_REG_BUS_VOLTAGE, (uint16_t*) data, 2);
+    *voltage = (float) (data[0] << 8 | data[1]) * 0.00125f;
+    return err;
 }
 
-void ina226_write_config(ina226_device_t *Device, uint16_t Config)
+esp_err_t ina226_get_current(ina226_device_t *device, float *current)
 {
-    ina226_write_reg(Device, INA226_REG_CFG, Config);
+    uint8_t data[2];
+    esp_err_t err;
+    err = ina226_read_register(device, INA226_REG_CURRENT, &data, 2);
+    *current = ((float) (data[0] << 8 | data[1])) * device->current_lsb;
+    return err;
 }
 
-ina226_averaging_mode_t ina226_get_averaging_mode(ina226_device_t *Device)
+esp_err_t ina226_get_power(ina226_device_t *device, float *power)
 {
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return -1);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig >>= INA226_CFG_AveragingOffset;
-    CurrentConfig &= 0x07;
-
-    return (ina226_averaging_mode_t)CurrentConfig;
+    uint8_t data[2];
+    esp_err_t err;
+    err = ina226_read_register(device, INA226_REG_POWER, &data, 2);
+    *power = (float) (data[0] << 8 | data[1]) * device->power_lsb;
+    return err;
 }
 
-void ina226_set_averaging_mode(ina226_device_t *Device, ina226_averaging_mode_t Mode)
+esp_err_t ina226_init(ina226_device_t *device, ina226_config_t *config)
 {
-    uint16_t CurrentConfig = 0;
+    esp_err_t err;
+    device->config = config;
 
-    NullCheck(Device, return);
-    RangeCheck(Mode, 0, INA226_NUM_AVERAGES, return);
+    /* write config to registers */
+    uint16_t bitmask = 0;
+    bitmask |= (config->averages << INA226_CFG_AVERAGING_OFFSET);
+    bitmask |= (config->bus_conv_time << INA226_CFG_BUS_VOLTAGE_OFFSET);
+    bitmask |= (config->shunt_conv_time << INA226_CFG_SHUNT_VOLTAGE_OFFSET);
+    bitmask |= config->mode;
+    err = ina226_write_register(device, INA226_REG_CONFIG, bitmask);
+    if(err != ESP_OK) return err;
 
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig &= ~INA226_CFG_AveragingMask;
-    CurrentConfig |= (Mode << INA226_CFG_AveragingOffset);
+    /* write calibration*/
+    float minimum_lsb = config->max_current / 32767;
+    float current_lsb = (uint16_t)(minimum_lsb * 100000000);
+    current_lsb /= 100000000;
+    current_lsb /= 0.0001;
+    current_lsb = ceil(current_lsb);
+    current_lsb *= 0.0001;
+    device->current_lsb = current_lsb;
+    device->power_lsb = current_lsb * 25;
+    uint16_t calibration_value = (uint16_t)((0.00512) / (current_lsb * config->r_shunt));
+    err = ina226_write_register(device, INA226_REG_CALIBRATION, calibration_value);
+    if(err != ESP_OK) return err;
 
-    ina226_write_reg(Device, INA226_REG_CFG, CurrentConfig);
+    return ESP_OK;
 }
 
-ina226_conversion_time_t ina226_get_bus_voltage_conversation_time(ina226_device_t *Device)
+esp_err_t ina226_get_alert_mask(ina226_device_t *device, ina226_alert_t *alert_mask)
 {
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return -1);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig >>= INA226_CFG_BusVoltageTimeOffset;
-    CurrentConfig &= 0x07;
-
-    return (ina226_conversion_time_t)CurrentConfig;
+    return ina226_read_register(device, INA226_REG_ALERT_MASK, (uint16_t *)alert_mask, 2);
 }
 
-void ina226_set_bus_voltage_conversation_time(ina226_device_t *Device, ina226_conversion_time_t ConversionTime)
+esp_err_t ina226_set_alert_mask(ina226_device_t *device, ina226_alert_t alert_mask)
 {
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return);
-    RangeCheck(ConversionTime, 0, INA226_NUM_CONVERSION_TIME, return);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig &= ~INA226_CFG_BusVoltageTimeMask;
-    CurrentConfig |= (ConversionTime << INA226_CFG_BusVoltageTimeOffset);
-
-    ina226_write_reg(Device, INA226_REG_CFG, CurrentConfig);
+    return ina226_write_register(device, INA226_REG_ALERT_MASK, (uint16_t)alert_mask);
 }
 
-ina226_conversion_time_t ina226_get_shunt_voltage_conversation_time(ina226_device_t *Device)
+esp_err_t ina226_set_alert_limit(ina226_device_t *device, float voltage)
 {
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return -1);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig >>= INA226_CFG_ShuntVoltageTimeOffset;
-    CurrentConfig &= 0x07;
-
-    return (ina226_conversion_time_t)CurrentConfig;
-}
-
-void ina226_set_shunt_voltage_conversation_time(ina226_device_t *Device, ina226_conversion_time_t ConversionTime)
-{
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return);
-    RangeCheck(ConversionTime, 0, INA226_NUM_CONVERSION_TIME, return);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig &= ~INA226_CFG_ShuntVoltageTimeMask;
-    CurrentConfig |= (ConversionTime << INA226_CFG_ShuntVoltageTimeOffset);
-
-    ina226_write_reg(Device, INA226_REG_CFG, CurrentConfig);
-}
-
-ina226_mode_t ina226_get_operation_mode(ina226_device_t *Device)
-{
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return -1);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig &= 0x07;
-
-    return (ina226_mode_t)CurrentConfig;
-}
-
-void ina226_set_operation_mode(ina226_device_t *Device, ina226_mode_t Mode)
-{
-    uint16_t CurrentConfig = 0;
-
-    NullCheck(Device, return);
-    RangeCheck(Mode, 0, INA226_NUM_MODES, return);
-
-    CurrentConfig = ina226_read_config(Device);
-    CurrentConfig &= ~INA226_CFG_ModeMask;
-    CurrentConfig |= Mode;
-
-    ina226_write_reg(Device, INA226_REG_CFG, CurrentConfig);
-}
-
-/* Returns the shunt voltage in millivolts */
-float ina226_get_shunt_voltage(ina226_device_t *Device)
-{
-    float Result = 0.0f;
-
-    Result = (float)((int16_t)ina226_read_reg16(Device, INA226_REG_SHUNT_VOLTAGE));
-    Result = Result * Device->shunt_voltage_lsb;
-
-    return Result;
-}
-
-/* Returns the voltage (in millivolts) of VBUS */
-float ina226_get_bus_voltage(ina226_device_t *Device)
-{
-    float Data = 0.0f;
-
-    Data = (float)ina226_read_reg16(Device, INA226_REG_BUS_VOLTAGE);
-    Data = Data * Device->bus_voltage_lsb;
-
-    return Data;
-}
-
-/* Returns the current flowing in microamps */
-float ina226_get_current(ina226_device_t *Device)
-{
-    float Data = 0.0f;
-
-    Data = (float)((int16_t)ina226_read_reg16(Device, INA226_REG_CURRENT));
-    Data = Data * Device->current_lsb;
-
-    return Data;
-}
-
-/* Returns the power flowing in microwatts */
-float ina226_get_power(ina226_device_t *Device)
-{
-    float Data = 0.0f;
-
-    Data = (float)((uint16_t)ina226_read_reg16(Device, INA226_REG_POWER));
-    Data = (Data * (Device->current_lsb * 25.0f));
-
-    return Data;
-}
-
-void ina226_reset(ina226_device_t *Device)
-{
-    NullCheck(Device, return);
-    ina226_write_config(Device, ina226_read_config(Device) | INA226_CFG_Reset);
-}
-
-static void INA226_Calibrate_FP(ina226_device_t *Device, int RShuntInMilliOhms, int MaxCurrentInAmps)
-{
-    float RShunt = ((float)RShuntInMilliOhms) / 1000.0f;
-    float current_lsb = 0.0f;
-    float Cal = 0.0f;
-
-    /* Somehow converting amperes to microamperes makes this work.
-     * At least at the current point in time my head is going to explode figuring this out
-     * but for now "Just Works(tm)" is good enough.
-     */
-    current_lsb = ((float)MaxCurrentInAmps * 1000000) / 32768.0f;
-    Cal = (0.00512f / (current_lsb * RShunt)) * 1000000;
-
-    Device->current_lsb = current_lsb;
-    Device->calibration_value = Cal;
-    Device->shunt_voltage_lsb = 2.5f;
-    Device->bus_voltage_lsb = 1.25f;
-
-    ina226_write_reg(Device, INA226_REG_CALIBRATION, (uint16_t)Cal);
-}
-
-void ina226_calibrate(ina226_device_t *Device, int RShuntInMilliOhms, int MaxCurrentInAmps)
-{
-    NullCheck(Device, return);
-    INA226_Calibrate_FP(Device, RShuntInMilliOhms, MaxCurrentInAmps);
-}
-
-bool ina226_init(ina226_device_t *Device, int I2CAddress, int RShuntInMilliOhms, int MaxCurrentInAmps, INAWriteBytes WriteBytesFn, INAReadBytes ReadBytesFn)
-{
-    const uint16_t ConfigRegisterAfterReset = 0x4127;
-
-    NullCheck(WriteBytesFn, return false);
-    NullCheck(ReadBytesFn, return false);
-    NullCheck(Device, return false);
-
-    memset(Device, 0, sizeof(ina226_device_t));
-
-    if (I2CAddress > 0)
-    {
-        INALock = xSemaphoreCreateMutex();
-
-        Device->WriteBytesFn = WriteBytesFn;
-        Device->ReadBytesFn = ReadBytesFn;
-        Device->address = I2CAddress;
-
-        ina226_reset(Device);
-
-        /* Check to see if we can actually talk to the device, if we can then the initial
-         * value for the config register should be 0x4127 after a reset.
-         */
-        if (ina226_read_config(Device) == ConfigRegisterAfterReset)
-        {
-            ina226_calibrate(Device, RShuntInMilliOhms, MaxCurrentInAmps);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-ina226_alert_t ina226_get_alert_mask(ina226_device_t *Device)
-{
-    return (ina226_alert_t)ina226_read_reg16(Device, INA226_REG_ALERT_MASK);
-}
-
-ina226_alert_t ina226_set_alert_mask(ina226_device_t *Device, ina226_alert_t AlertMask)
-{
-    ina226_alert_t Old = ina226_get_alert_mask(Device);
-
-    ina226_write_reg(Device, INA226_REG_ALERT_MASK, AlertMask);
-    return Old;
-}
-
-static uint16_t INA226_SetAlertLimit(ina226_device_t *Device, float Value)
-{
-    uint16_t Old = ina226_read_reg16(Device, INA226_REG_ALERT_LIMIT);
-
-    NullCheck(Device, return 0);
-    ina226_write_reg(Device, INA226_REG_ALERT_LIMIT, (uint16_t)Value);
-
-    return Old;
-}
-
-float ina226_set_alert_limit_bus_voltage(ina226_device_t *Device, float BusVoltageInMV)
-{
-    float OldLimit = 0.0f;
-
-    NullCheck(Device, return 0.0f);
-
-    OldLimit = (float)INA226_SetAlertLimit(Device, BusVoltageInMV * Device->bus_voltage_lsb);
-    OldLimit /= Device->bus_voltage_lsb;
-
-    return OldLimit;
+    return ina226_write_register(device, INA226_REG_ALERT_LIMIT, (uint16_t)(voltage));
 }
