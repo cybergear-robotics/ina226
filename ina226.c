@@ -37,19 +37,19 @@ esp_err_t ina226_read_register(ina226_device_t *device, uint8_t reg_addr, uint8_
 
 esp_err_t ina226_get_manufacturer_id(ina226_device_t *device, uint16_t *manufacturer_id)
 {
-    return ina226_read_register(device, INA226_REG_MANUFACTURER_ID, manufacturer_id, 2);
+    return ina226_read_register(device, INA226_REG_MANUFACTURER_ID, (uint8_t*)manufacturer_id, 2);
 }
 
 esp_err_t ina226_get_die_id(ina226_device_t *device, uint16_t *die_id)
 {
-    return ina226_read_register(device, INA226_REG_DIE_ID, die_id, 2);
+    return ina226_read_register(device, INA226_REG_DIE_ID, (uint8_t*)die_id, 2);
 }
 
 esp_err_t ina226_get_shunt_voltage(ina226_device_t *device, float *voltage)
 {
     uint8_t data[2];
     esp_err_t err;
-    err = ina226_read_register(device, INA226_REG_SHUNT_VOLTAGE, &data, 2);
+    err = ina226_read_register(device, INA226_REG_SHUNT_VOLTAGE, (uint8_t *)data, 2);
     *voltage = (float) (data[0] << 8 | data[1]) * 2.5e-6f; /* fixed to 2.5 uV */
     return err;
 }
@@ -58,7 +58,7 @@ esp_err_t ina226_get_bus_voltage(ina226_device_t *device, float *voltage)
 {
     uint8_t data[2];
     esp_err_t err;
-    err = ina226_read_register(device, INA226_REG_BUS_VOLTAGE, (uint16_t*) data, 2);
+    err = ina226_read_register(device, INA226_REG_BUS_VOLTAGE, (uint8_t*) data, 2);
     *voltage = (float) (data[0] << 8 | data[1]) * 0.00125f;
     return err;
 }
@@ -67,7 +67,7 @@ esp_err_t ina226_get_current(ina226_device_t *device, float *current)
 {
     uint8_t data[2];
     esp_err_t err;
-    err = ina226_read_register(device, INA226_REG_CURRENT, &data, 2);
+    err = ina226_read_register(device, INA226_REG_CURRENT, (uint8_t *)data, 2);
     *current = ((float) (data[0] << 8 | data[1])) * device->current_lsb;
     return err;
 }
@@ -76,7 +76,7 @@ esp_err_t ina226_get_power(ina226_device_t *device, float *power)
 {
     uint8_t data[2];
     esp_err_t err;
-    err = ina226_read_register(device, INA226_REG_POWER, &data, 2);
+    err = ina226_read_register(device, INA226_REG_POWER, (uint8_t *)data, 2);
     *power = (float) (data[0] << 8 | data[1]) * device->power_lsb;
     return err;
 }
@@ -113,7 +113,7 @@ esp_err_t ina226_init(ina226_device_t *device, ina226_config_t *config)
 
 esp_err_t ina226_get_alert_mask(ina226_device_t *device, ina226_alert_t *alert_mask)
 {
-    return ina226_read_register(device, INA226_REG_ALERT_MASK, (uint16_t *)alert_mask, 2);
+    return ina226_read_register(device, INA226_REG_ALERT_MASK, (uint8_t *)alert_mask, 2);
 }
 
 esp_err_t ina226_set_alert_mask(ina226_device_t *device, ina226_alert_t alert_mask)
