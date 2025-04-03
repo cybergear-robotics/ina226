@@ -9,7 +9,6 @@
 #include <esp_err.h>
 
 #include "ina226.h"
-#include "ina226_defs.h"
 
 #define INA226_REG_CONFIG           (0x00)
 #define INA226_REG_SHUNT_VOLTAGE    (0x01)
