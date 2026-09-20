@@ -37,12 +37,18 @@ esp_err_t ina226_read_register(ina226_device_t *device, uint8_t reg_addr, uint8_
 
 esp_err_t ina226_get_manufacturer_id(ina226_device_t *device, uint16_t *manufacturer_id)
 {
-    return ina226_read_register(device, INA226_REG_MANUFACTURER_ID, (uint8_t*)manufacturer_id, 2);
+    uint8_t data[2];
+    esp_err_t err = ina226_read_register(device, INA226_REG_MANUFACTURER_ID, data, sizeof(data));
+    *manufacturer_id = (uint16_t)(data[0] << 8 | data[1]);
+    return err;
 }
 
 esp_err_t ina226_get_die_id(ina226_device_t *device, uint16_t *die_id)
 {
-    return ina226_read_register(device, INA226_REG_DIE_ID, (uint8_t*)die_id, 2);
+    uint8_t data[2];
+    esp_err_t err = ina226_read_register(device, INA226_REG_DIE_ID, data, sizeof(data));
+    *die_id = (uint16_t)(data[0] << 8 | data[1]);
+    return err;
 }
 
 esp_err_t ina226_get_shunt_voltage(ina226_device_t *device, float *voltage)
@@ -113,7 +119,10 @@ esp_err_t ina226_init(ina226_device_t *device, ina226_config_t *config)
 
 esp_err_t ina226_get_alert_mask(ina226_device_t *device, ina226_alert_t *alert_mask)
 {
-    return ina226_read_register(device, INA226_REG_ALERT_MASK, (uint8_t *)alert_mask, 2);
+    uint8_t data[2];
+    esp_err_t err = ina226_read_register(device, INA226_REG_ALERT_MASK, data, sizeof(data));
+    *alert_mask = (ina226_alert_t)(data[0] << 8 | data[1]);
+    return err;
 }
 
 esp_err_t ina226_set_alert_mask(ina226_device_t *device, ina226_alert_t alert_mask)
