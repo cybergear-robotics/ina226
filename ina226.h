@@ -1,10 +1,13 @@
 #ifndef _INA226_H_
 #define _INA226_H_
 
+#include <stdint.h>
+
 #include "esp_err.h"
 #include "driver/i2c.h"
 
 #define INA226_I2C_ADDR 0x41
+#define INA226_BUS_VOLTAGE_LSB 0.00125f
 
 typedef enum
 {
@@ -56,20 +59,19 @@ typedef enum
     INA226_MODE_SHUNT_BUS_CONT  = 0b111,
 } ina226_mode_t;
 
-typedef enum
-{
-    INA226_ALERT_SHUNT_OVER_VOLTAGE     = 0xf,
-    INA226_ALERT_SHUNT_UNDER_VOLTAGE    = 0xe,
-    INA226_ALERT_BUS_OVER_VOLTAGE       = 0xd,
-    INA226_ALERT_BUS_UNDER_VOLTAGE      = 0xc,
-    INA226_ALERT_POWER_OVER_LIMIT       = 0xb,
-    INA226_ALERT_CONVERSION_READY       = 0xa,
-    INA226_ALERT_FUNCTION_FLAG          = 0x4,
-    INA226_ALERT_CONVERSION_READY_FLAG  = 0x3,
-    INA226_ALERT_MATH_OVERFLOW_FLAG     = 0x2,
-    INA226_ALERT_POLARITY               = 0x1,
-    INA226_ALERT_LATCH_ENABLE           = 0x0
-} ina226_alert_t;
+typedef uint16_t ina226_alert_mask_t;
+
+#define INA226_ALERT_SHUNT_OVER_VOLTAGE    (1U << 15)
+#define INA226_ALERT_SHUNT_UNDER_VOLTAGE   (1U << 14)
+#define INA226_ALERT_BUS_OVER_VOLTAGE      (1U << 13)
+#define INA226_ALERT_BUS_UNDER_VOLTAGE     (1U << 12)
+#define INA226_ALERT_POWER_OVER_LIMIT      (1U << 11)
+#define INA226_ALERT_CONVERSION_READY      (1U << 10)
+#define INA226_ALERT_FUNCTION_FLAG         (1U << 4)
+#define INA226_ALERT_CONVERSION_READY_FLAG (1U << 3)
+#define INA226_ALERT_MATH_OVERFLOW_FLAG    (1U << 2)
+#define INA226_ALERT_POLARITY              (1U << 1)
+#define INA226_ALERT_LATCH_ENABLE          (1U << 0)
 
 typedef struct
 {
@@ -89,7 +91,7 @@ typedef struct
 {
     float current_lsb;
     float power_lsb;
-    ina226_config_t *config;
+    const ina226_config_t *config;
 } ina226_device_t;
 
 
@@ -149,42 +151,95 @@ esp_err_t ina226_get_current(ina226_device_t *device, float *current);
 esp_err_t ina226_get_power(ina226_device_t *device, float *power);
 
 /**
- * @brief initialize INA226 with provided config
- * 
- * This will set the configuration register and setup the calibration.
- * 
- * @param device pointer to device handle
- * @param config configuration
- * @return esp_err_t returns ESP_OK on success
+ * @brief Configures the INA226 measurement and calibration registers.
+ *
+ * @param device INA226 device handle.
+ * @param config INA226 bus and measurement configuration.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_INVALID_ARG if device or config is NULL.
+ * @return ESP_ERR_TIMEOUT if an I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
  */
-esp_err_t ina226_init(ina226_device_t *device, ina226_config_t *config);
+esp_err_t ina226_init(ina226_device_t *device, const ina226_config_t *config);
 
 /**
- * @brief get alert mask
- * 
- * @param device pointer to device handle
- * @param alert_mask mask
- * @return esp_err_t returns ESP_OK on success
+ * @brief Gets the Mask/Enable Register.
+ *
+ * Reading this register clears a latched INA226_ALERT_FUNCTION_FLAG.
+ *
+ * @param device INA226 device handle initialized with ina226_init().
+ * @param alert_mask Destination for the complete Mask/Enable Register value.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_TIMEOUT if the I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
  */
-esp_err_t ina226_get_alert_mask(ina226_device_t *device, ina226_alert_t *alert_mask);
+esp_err_t ina226_get_alert_mask(ina226_device_t *device, ina226_alert_mask_t *alert_mask);
 
 /**
- * @brief set alert mask
- * 
- * @param device pointer to device handle
- * @param alert_mask mask
- * @return esp_err_t returns ESP_OK on success
+ * @brief Sets the complete Mask/Enable Register value.
+ *
+ * Combine INA226_ALERT_* bit masks as required. Only one limit function from
+ * bits 15 through 11 can control the Alert pin at a time.
+ *
+ * @param device INA226 device handle initialized with ina226_init().
+ * @param alert_mask Mask/Enable Register value to write.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_TIMEOUT if the I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
  */
-esp_err_t ina226_set_alert_mask(ina226_device_t *device, ina226_alert_t alert_mask);
+esp_err_t ina226_set_alert_mask(ina226_device_t *device, ina226_alert_mask_t alert_mask);
 
 /**
- * @brief set alert limit
- * 
- * @param device pointer to device handle
- * @param voltage the alert limit in V
- * @return esp_err_t returns ESP_OK on success
+ * @brief Sets the raw Alert Limit Register value.
+ *
+ * Use this for shunt-voltage and power alerts, whose register encoding is not
+ * a bus voltage. For bus-voltage alerts, prefer
+ * ina226_set_bus_voltage_alert_limit().
+ *
+ * @param device INA226 device handle initialized with ina226_init().
+ * @param limit Raw 16-bit Alert Limit Register value.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_TIMEOUT if the I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
  */
-esp_err_t ina226_set_alert_limit(ina226_device_t *device, float voltage);
+esp_err_t ina226_set_alert_limit_raw(ina226_device_t *device, uint16_t limit);
+
+/**
+ * @brief Gets the raw Alert Limit Register value.
+ *
+ * @param device INA226 device handle initialized with ina226_init().
+ * @param limit Destination for the raw 16-bit Alert Limit Register value.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_TIMEOUT if the I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
+ */
+esp_err_t ina226_get_alert_limit_raw(ina226_device_t *device, uint16_t *limit);
+
+/**
+ * @brief Sets a bus-voltage alert limit in volts.
+ *
+ * Use this only with INA226_ALERT_BUS_OVER_VOLTAGE or
+ * INA226_ALERT_BUS_UNDER_VOLTAGE.
+ *
+ * @param device INA226 device handle initialized with ina226_init().
+ * @param voltage Bus-voltage limit in V, from 0 to 81.91875 V.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_INVALID_ARG if voltage is outside the supported range.
+ * @return ESP_ERR_TIMEOUT if the I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
+ */
+esp_err_t ina226_set_bus_voltage_alert_limit(ina226_device_t *device, float voltage);
+
+/**
+ * @brief Gets the bus-voltage alert limit in volts.
+ *
+ * @param device INA226 device handle initialized with ina226_init().
+ * @param voltage Destination for the bus-voltage limit in V.
+ * @return ESP_OK on success.
+ * @return ESP_ERR_TIMEOUT if the I2C transaction times out.
+ * @return ESP_FAIL if the I2C transaction fails.
+ */
+esp_err_t ina226_get_bus_voltage_alert_limit(ina226_device_t *device, float *voltage);
 
 
 #endif
