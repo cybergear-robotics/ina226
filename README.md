@@ -6,19 +6,22 @@
 [![Framework](https://img.shields.io/badge/Framework-ESP_IDF-orange.svg)](https://shields.io/)
 [![Language](https://img.shields.io/badge/Language-C-purple.svg)](https://shields.io/)
 
-
 ## Using component
+
 ```bash
 idf.py add-dependency "cybergear-robotics/ina226"
 ```
 
 ## Example
+
 Not all examples are ported. For further examples, please look at the original project.
 
 1. create example project
+
 ```bash
 idf.py create-project-from-example "cybergear-robotics/ina226:read_voltage"
 ```
+
 2. Go to to example directory (for example `read_voltage`)
    `cd read_voltage`
 3. Set ESP chip
@@ -28,4 +31,14 @@ idf.py create-project-from-example "cybergear-robotics/ina226:read_voltage"
 5. Build, flash
    `idf.py build flash monitor`
 
+## Hardware test
 
+The Unity hardware test is self-contained in `test/` and uses I2C port 0, SCL GPIO 11,
+and SDA GPIO 12 by default. It expects 24.0 V on the INA226 bus input, with a 0.5 V
+tolerance. All values can be changed with `idf.py menuconfig`.
+
+Run it from the component repository:
+
+```bash
+idf.py -C test_app build flash monitor
+```

@@ -1,0 +1,27 @@
+menu "INA226 Hardware Test"
+
+    config INA226_TEST_I2C_SCL
+        int "I2C SCL GPIO"
+        default 11
+        help
+            GPIO connected to the INA226 SCL line.
+
+    config INA226_TEST_I2C_SDA
+        int "I2C SDA GPIO"
+        default 12
+        help
+            GPIO connected to the INA226 SDA line.
+
+    config INA226_TEST_EXPECTED_BUS_VOLTAGE_MV
+        int "Expected bus voltage in mV"
+        default 24000
+        help
+            Nominal voltage supplied to the INA226 bus input.
+
+    config INA226_TEST_BUS_VOLTAGE_TOLERANCE_MV
+        int "Bus voltage tolerance in mV"
+        default 500
+        help
+            Permitted deviation from the expected bus voltage.
+
+endmenu
