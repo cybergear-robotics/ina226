@@ -12,6 +12,13 @@
 idf.py add-dependency "cybergear-robotics/ina226"
 ```
 
+## Requirements
+
+ESP-IDF 5.2 or newer is required. Configure an I2C master bus and add the
+INA226 as an I2C device using `driver/i2c_master.h`, then pass the resulting
+device handle through `ina226_config_t.i2c_dev`. The example below shows the
+complete setup.
+
 ## Example
 
 Not all examples are ported. For further examples, please look at the original project.

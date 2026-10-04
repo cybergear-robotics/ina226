@@ -13,20 +13,22 @@
 
 #define TAG "read_voltage"
 
-/* i2c bus configuration */
-i2c_config_t conf = {
-	.mode = I2C_MODE_MASTER,
-	.sda_io_num = (gpio_num_t) CONFIG_I2C_MASTER_SDA,
-	.sda_pullup_en = GPIO_PULLUP_ENABLE,
-	.scl_io_num = (gpio_num_t) CONFIG_I2C_MASTER_SCL,
-	.scl_pullup_en = GPIO_PULLUP_ENABLE,
-	.master.clk_speed = 400000,
-	.clk_flags = I2C_SCLK_SRC_FLAG_FOR_NOMAL
+static const i2c_master_bus_config_t i2c_bus_config = {
+    .i2c_port = I2C_NUM_0,
+    .sda_io_num = CONFIG_I2C_MASTER_SDA,
+    .scl_io_num = CONFIG_I2C_MASTER_SCL,
+    .clk_source = I2C_CLK_SRC_DEFAULT,
+    .glitch_ignore_cnt = 7,
+    .flags.enable_internal_pullup = true,
 };
 
-ina226_config_t ina_config = {
-	.i2c_port = I2C_NUM_0,	/* use i2c port 0 */
-	.i2c_addr = INA226_I2C_ADDR, /* use default i2c address of INA226*/
+static const i2c_device_config_t ina226_i2c_config = {
+    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+    .device_address = INA226_I2C_ADDR,
+    .scl_speed_hz = 400000,
+};
+
+static ina226_config_t ina_config = {
 	.timeout_ms = 100, /* wait up to 100 ms on writes */
     .averages = INA226_AVERAGES_16,
     .bus_conv_time = INA226_BUS_CONV_TIME_1100_US,
@@ -40,12 +42,12 @@ ina226_config_t ina_config = {
 void app_main(void)
 {
 	ina226_device_t ina;
+	static i2c_master_bus_handle_t i2c_bus;
 
-	/* setup i2c */
-	ESP_ERROR_CHECK(i2c_param_config(ina_config.i2c_port, &conf));
-	ESP_ERROR_CHECK(i2c_driver_install(ina_config.i2c_port, conf.mode, 0, 0, 0));
+	ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_config, &i2c_bus));
+	ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus, &ina226_i2c_config, &ina_config.i2c_dev));
 	
-	/* setup ICM20948 device */
+	/* Setup INA226 device. */
 	ESP_ERROR_CHECK(ina226_init(&ina, &ina_config));
 
     /* loop */

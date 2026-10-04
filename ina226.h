@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 
 #define INA226_I2C_ADDR 0x41
 #define INA226_BUS_VOLTAGE_LSB 0.00125f
@@ -75,8 +75,7 @@ typedef uint16_t ina226_alert_mask_t;
 
 typedef struct
 {
-    i2c_port_t i2c_port;
-    int i2c_addr;
+    i2c_master_dev_handle_t i2c_dev;
     uint32_t timeout_ms;
     ina226_averages_t averages;
     ina226_bus_conv_time_t bus_conv_time;

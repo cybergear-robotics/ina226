@@ -1,4 +1,4 @@
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -9,19 +9,22 @@
 
 #include "ina226.h"
 
-static const i2c_config_t i2c_config = {
-    .mode = I2C_MODE_MASTER,
+static const i2c_master_bus_config_t i2c_bus_config = {
+    .i2c_port = I2C_NUM_0,
     .sda_io_num = CONFIG_INA226_TEST_I2C_SDA,
-    .sda_pullup_en = GPIO_PULLUP_ENABLE,
     .scl_io_num = CONFIG_INA226_TEST_I2C_SCL,
-    .scl_pullup_en = GPIO_PULLUP_ENABLE,
-    .master.clk_speed = 400000,
-    .clk_flags = I2C_SCLK_SRC_FLAG_FOR_NOMAL,
+    .clk_source = I2C_CLK_SRC_DEFAULT,
+    .glitch_ignore_cnt = 7,
+    .flags.enable_internal_pullup = true,
 };
 
-static const ina226_config_t ina226_config = {
-    .i2c_port = I2C_NUM_0,
-    .i2c_addr = INA226_I2C_ADDR,
+static const i2c_device_config_t ina226_i2c_config = {
+    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+    .device_address = INA226_I2C_ADDR,
+    .scl_speed_hz = 400000,
+};
+
+static ina226_config_t ina226_config = {
     .timeout_ms = 100,
     .averages = INA226_AVERAGES_16,
     .bus_conv_time = INA226_BUS_CONV_TIME_1100_US,
@@ -35,17 +38,19 @@ static const ina226_config_t ina226_config = {
 #define INA226_DIE_ID 0x2260
 
 static ina226_device_t ina226;
+static i2c_master_bus_handle_t i2c_bus;
 
 void setUp(void)
 {
-    TEST_ASSERT_EQUAL(ESP_OK, i2c_param_config(ina226_config.i2c_port, &i2c_config));
-    TEST_ASSERT_EQUAL(ESP_OK, i2c_driver_install(ina226_config.i2c_port, i2c_config.mode, 0, 0, 0));
+    TEST_ASSERT_EQUAL(ESP_OK, i2c_new_master_bus(&i2c_bus_config, &i2c_bus));
+    TEST_ASSERT_EQUAL(ESP_OK, i2c_master_bus_add_device(i2c_bus, &ina226_i2c_config, &ina226_config.i2c_dev));
     TEST_ASSERT_EQUAL(ESP_OK, ina226_init(&ina226, &ina226_config));
 }
 
 void tearDown(void)
 {
-    TEST_ASSERT_EQUAL(ESP_OK, i2c_driver_delete(ina226_config.i2c_port));
+    TEST_ASSERT_EQUAL(ESP_OK, i2c_master_bus_rm_device(ina226_config.i2c_dev));
+    TEST_ASSERT_EQUAL(ESP_OK, i2c_del_master_bus(i2c_bus));
 }
 
 static void test_bus_voltage_alert(ina226_alert_mask_t alert, float limit, int expect_alert)

@@ -15,24 +15,22 @@
 static esp_err_t ina226_write_register(ina226_device_t *device, uint8_t reg_addr, uint16_t value)
 {
     uint8_t write_buf[3] = {reg_addr, value >> 8, value & 0xFF};
-    return i2c_master_write_to_device(
-        device->config->i2c_port, 
-        device->config->i2c_addr, 
+    return i2c_master_transmit(
+        device->config->i2c_dev,
         write_buf, 
         sizeof(write_buf), 
-        device->config->timeout_ms / portTICK_PERIOD_MS);
+        device->config->timeout_ms);
 }
 
 static esp_err_t ina226_read_register(ina226_device_t *device, uint8_t reg_addr, uint8_t* data, uint8_t len)
 {
-    return i2c_master_write_read_device(
-        device->config->i2c_port, 
-        device->config->i2c_addr, 
+    return i2c_master_transmit_receive(
+        device->config->i2c_dev,
         &reg_addr, 
         1, 
         data, 
         len, 
-        device->config->timeout_ms / portTICK_PERIOD_MS);
+        device->config->timeout_ms);
 }
 
 esp_err_t ina226_get_manufacturer_id(ina226_device_t *device, uint16_t *manufacturer_id)
@@ -89,7 +87,7 @@ esp_err_t ina226_get_power(ina226_device_t *device, float *power)
 
 esp_err_t ina226_init(ina226_device_t *device, const ina226_config_t *config)
 {
-    if (device == NULL || config == NULL) {
+    if (device == NULL || config == NULL || config->i2c_dev == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
