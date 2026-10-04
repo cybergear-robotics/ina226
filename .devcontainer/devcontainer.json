@@ -1,0 +1,13 @@
+{
+  "name": "ESP-IDF 6.1",
+  "image": "espressif/idf:v6.1",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "espressif.esp-idf-extension"
+      ]
+    }
+  },
+  "postCreateCommand": ". /opt/esp/idf/export.sh"
+}
